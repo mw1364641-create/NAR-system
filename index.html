@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام NAR الميداني الذكي للطوارئ - تطوير مينا وجدي يونان</title>
+<title>نظام NAR السحابي الذكي للطوارئ - تطوير مينا وجدي يونان</title>
+<!-- مكتبة Supabase للربط اللحظي Real-time -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
 --gold: #d4af37;
@@ -48,7 +50,7 @@ box-shadow: 0 8px 25px rgba(0,0,0,0.5);
 margin-bottom: 20px;
 }
 .panel h3 { margin-top: 0; color: #8b0000; font-size: 17px; border-bottom: 2px solid var(--gold); padding-bottom: 6px; }
-textarea, input[type="text"] {
+textarea {
 width: 100%;
 padding: 12px;
 border-radius: 8px;
@@ -119,7 +121,7 @@ background: #0d1b2a;
 color: #fff;
 padding: 12px;
 border-radius: 8px;
-max-height: 180px;
+max-height: 200px;
 overflow-y: auto;
 border: 1px solid var(--gold);
 font-size: 13px;
@@ -136,7 +138,7 @@ border-right: 3px solid var(--gold);
 <body>
 
 <header>
-<h1>🚨 نظام NAR الميداني المتكامل (مترجم + مرسل محلي بدون إنترنت)</h1>
+<h1>🚨 نظام NAR السحابي اللحظي (مترجم + مرسل مركزي)</h1>
 <p>تطوير المبتكر: مينا وجدي يونان &copy; 2026</p>
 </header>
 
@@ -145,11 +147,11 @@ border-right: 3px solid var(--gold);
 <!-- لوحة الإدخال والترجمة الفورية -->
 <div class="panel">
 <h3>✍️ محطة الإدخال والترجمة الشاملة (عربي / إنجليزي)</h3>
-<textarea id="userInput" rows="3" placeholder="اكتب رسالة الطوارئ بالعربي أو الإنجليزي هنا (مثال: نحتاج إسعاف وفريق إغاثة عاجل)..." oninput="processTranslation()"></textarea>
+<textarea id="userInput" rows="3" placeholder="اكتب رسالة الطوارئ بالعربي أو الإنجليزي هنا (مثال: نحتاج إسعاف عاجل في موقع كذا)..." oninput="processTranslation()"></textarea>
 
 <div class="btn-group">
 <button onclick="playMorseAudio()">🔊 تشغيل نغمات مورس</button>
-<button class="btn-emergency" onclick="broadcastNarMessage()">📡 إرسال فوري للشبكة المحلية (NAR Mesh)</button>
+<button class="btn-emergency" onclick="sendNarToCloud()">📡 إرسال فوري لمحطة الطوارئ السحابية</button>
 </div>
 
 <label style="font-weight:bold; font-size:13px; color:#333; display:block; margin-bottom:5px;">⚡ ترجمة شفرة مورس (Morse Code):</label>
@@ -161,25 +163,30 @@ border-right: 3px solid var(--gold);
 </div>
 </div>
 
-<!-- لوحة استقبال شبكة NAR المحلية -->
+<!-- لوحة استلام طوارئ الشبكة السحابية -->
 <div class="panel">
-<h3>🌐 لوحة مراقبة واستقبال الشبكة المحلية (Mesh Feed - بدون إنترنت)</h3>
-<p style="font-size:12px; color:#555; margin-top:0;">تستقبل تلقائياً أي رسائل بث من الأجهزة المجاورة المتصلة بنفس الموقع:</p>
+<h3>🌐 لوحة مراقبة واستقبال محطة الطوارئ المركزية (Real-time Feed)</h3>
+<p style="font-size:12px; color:#555; margin-top:0;">تستقبل لحظياً أي استغاثة تُرسل من أي موبايل أو جهاز متصل بالبطولة أو النظام:</p>
 <div id="networkFeed" class="network-feed">
-<div class="msg-item">ℹ️ النظام جاهز. لم يتم استلام رسائل جديدة بعد...</div>
+<div class="msg-item">ℹ️ جاري الاتصال بقاعدة بيانات الطوارئ السحابية...</div>
 </div>
 </div>
 
 </div>
 
 <script>
-// قاموس شفرة مورس للحروف العربية والإنجليزية الشاملة
+// بيانات Supabase المحدثة الخاصة بمشروعك يا مينا
+const SUPABASE_URL = 'https://typtskmgjjajvwlxzxyd.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_f-miTVH0coVNguJAg_PTzQ_pTaA1RmX';
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// قاموس شفرة مورس
 const morseMap = {
 'a':'.-', 'b':'-...', 'c':'-.-.', 'd':'-..', 'e':'.', 'f':'..-.', 'g':'--.', 'h':'....', 'i':'..', 'j':'.---', 'k':'-.-', 'l':'.-..', 'm':'--', 'n':'-.', 'o':'---', 'p':'.--.', 'q':'--.-', 'r':'.-.', 's':'...', 't':'-', 'u':'..-', 'v':'...-', 'w':'.--', 'x':'-..-', 'y':'-.--', 'z':'--..',
 'أ':'.-', 'ب':'-...', 'ت':'-', 'ث':'...-', 'ج':'.---', 'ح':'....', 'خ':'--.', 'د':'-..', 'ذ':'--..', 'ر':'.-.', 'ز':'--..', 'س':'...', 'ش':'----', 'ص':'-..-', 'ض':'...-', 'ط':'-.-', 'ظ':'.-.', 'ع':'.-.-', 'غ':'--.', 'ف':'..-.', 'ق':'--.-', 'ك':'-.-', 'ل':'.-..', 'م':'--', 'ن':'-.', 'ه':'....', 'و':'.--', 'ي':'..', ' ':'/'
 };
 
-// ترجمة النص فوراً إلى مورس وإشارات
 function processTranslation() {
 let text = document.getElementById('userInput').value.toLowerCase();
 let morseRes = "";
@@ -192,14 +199,12 @@ signContainer.innerHTML = '<span style="color:#777; font-size:13px;">اكتب ن
 return;
 }
 
-// تحويل لمورس
 for(let i=0; i<text.length; i++) {
 let char = text[i];
 morseRes += (morseMap[char] || char) + " ";
 }
 document.getElementById('morseOutput').innerText = morseRes;
 
-// توليد بطاقات لغة الإشارة التعبيرية
 for(let i=0; i<Math.min(text.length, 15); i++) {
 if(text[i] !== ' ') {
 let card = document.createElement('div');
@@ -210,7 +215,6 @@ signContainer.appendChild(card);
 }
 }
 
-// تشغيل نغمات مورس صوتياً
 function playMorseAudio() {
 let morseText = document.getElementById('morseOutput').innerText;
 if(!morseText || morseText.includes("-... .-")) {
@@ -240,87 +244,78 @@ osc.stop(audioCtx.currentTime + duration);
 }
 delay += duration + 0.08;
 }
-alert("🔊 جاري تشغيل إشارات مورس الصوتية الآن...");
+alert("🔊 جاري تشغيل إشارات مورس الصوتية...");
 }
 
-// نظام إرسال واستقبال الشبكة المحلية (NAR Local Mesh عبر BroadcastChannel)
-const narChannel = new BroadcastChannel('NAR_GLOBAL_MESH_NETWORK');
-
-function broadcastNarMessage() {
+// إرسال البيانات فوراً إلى جدول Supabase
+async function sendNarToCloud() {
 let text = document.getElementById('userInput').value;
 let morse = document.getElementById('morseOutput').innerText;
 
 if(!text.trim()) {
-alert("⚠️ من فضلك اكتب رسالة قبل إرسالها للشبكة!");
+alert("⚠️ من فضلك اكتب رسالة قبل إرسالها!");
 return;
 }
 
-let packet = {
-sender: "جهاز_مينا_" + Math.floor(Math.random()*1000),
-text: text,
-morse: morse,
-time: new Date().toLocaleTimeString()
-};
+let senderName = "موبايل_مينا_" + Math.floor(Math.random()*1000);
 
-// إرسال عبر القناة المحلية المجاورة بدون إنترنت
-narChannel.postMessage(packet);
-appendMessageToFeed(packet, true);
+let { data, error } = await supabaseClient
+.from('nar_messages')
+.insert([{ sender: senderName, text: text, morse: morse }]);
+
+if(error) {
+alert("❌ حدث خطأ أثناء الإرسال: " + error.message);
+} else {
 document.getElementById('userInput').value = "";
 processTranslation();
-alert("✅ تم بث الرسالة (نص + مورس + إشارة) بنجاح لجميع الأجهزة المجاورة على نفس الشبكة المحلية!");
+alert("✅ تم إرسال الاستغاثة لمحطة الطوارئ المركزية بنجاح وتوزيعها على جميع الأجهزة المتصلة!");
+}
 }
 
-// استقبال الرسائل الواردة من الأجهزة المجاورة
-narChannel.onmessage = function(event) {
-appendMessageToFeed(event.data, false);
-};
+// جلب الرسائل القديمة أول ما الصفحة تفتح
+async function fetchInitialMessages() {
+let { data, error } = await supabaseClient
+.from('nar_messages')
+.select('*')
+.order('id', { ascending: false })
+.limit(10);
 
-function appendMessageToFeed(pkt, isSelf) {
+if(!error && data) {
 let feed = document.getElementById('networkFeed');
-if(feed.innerText.includes("النظام جاهز")) {
+feed.innerHTML = "";
+data.reverse().forEach(msg => {
+appendMessageToFeed(msg);
+});
+}
+}
+
+// الاستماع للرسائل اللحظية الجديدة عبر Supabase Realtime
+supabaseClient
+.channel('public:nar_messages')
+.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nar_messages' }, payload => {
+appendMessageToFeed(payload.new);
+})
+.subscribe();
+
+function appendMessageToFeed(pkt) {
+let feed = document.getElementById('networkFeed');
+if(feed.innerText.includes("جاري الاتصال")) {
 feed.innerHTML = "";
 }
+let timeStr = new Date(pkt.created_at || Date.now()).toLocaleTimeString();
 let item = document.createElement('div');
 item.className = 'msg-item';
 item.innerHTML = `
-<strong>${isSelf ? '📤 (أنت أرسلت)' : '📥 (استقبال من جهاز مجاور)'} [${pkt.sender}] - ${pkt.time}</strong><br>
+<strong>🚨 استغاثة جديدة واردة من [${pkt.sender}] - ${timeStr}</strong><br>
 💬 <strong>النص:</strong> ${pkt.text}<br>
 ⚡ <strong>مورس:</strong> <span style="color:var(--gold-light);">${pkt.morse}</span>
 `;
 feed.prepend(item);
 }
-<script type="module">
-  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-  const SUPABASE_URL = 'https://typtskmgjjajvwlxzxyd.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_f-miTVH0coVNguJAg_PTzQ_pTaA1RmX';
-
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // دالة الإرسال للسحاب
-  window.sendEmergencyMessage = async function(senderName, messageText, morseCode) {
-      const { error } = await supabase
-          .from('nar_messages')
-          .insert([
-              { sender: senderName, text: messageText, morse: morseCode }
-          ]);
-      
-      if (error) {
-          console.error('خطأ في الإرسال:', error.message);
-      } else {
-          console.log('تم الإرسال بنجاح!');
-      }
-  };
-
-  // استقبال الرسائل لحظياً (Realtime)
-  supabase
-    .channel('public:nar_messages')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nar_messages' }, payload => {
-      console.log('رسالة جديدة وصلت:', payload.new);
-      if (typeof appendMessageToFeed === 'function') {
-          appendMessageToFeed(payload.new, false);
-      }
-    })
-    .subscribe();
+// تشغيل جلب البيانات عند التحميل
+fetchInitialMessages();
 </script>
+
+</body>
 </html>
